@@ -1,0 +1,390 @@
+// SQL schema. This project is PostgreSQL only — see src/core/config/env.ts.
+//
+// Money is stored in minor units (Int) rather than Decimal. Decimal would be more faithful
+// to the domain, but Prisma returns it as a Decimal.js instance, and letting an ORM type
+// cross the repository boundary is exactly what the architecture forbids. Integer minor
+// units are exact, compare and sum without surprises, and map to `number`.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  runtime      = "nodejs"
+  moduleFormat = "esm"
+}
+
+// Prisma 7 forbids `url` here: the CLI reads it from prisma.config.ts and the runtime
+// gets it from the driver adapter passed to the PrismaClient constructor.
+datasource db {
+  provider = "postgresql"
+}
+
+enum ActorStatus {
+  pending
+  active
+  disabled
+}
+
+/// One table for every kind of actor. This project defines two: `customer`, who shops, and
+/// `agent`, who runs the back office.
+model Actor {
+  id        String      @id
+  actorType String      @map("actor_type")
+  email     String
+  status    ActorStatus @default(pending)
+
+  displayName  String  @map("display_name")
+  passwordHash String  @map("password_hash")
+  phone        String?
+
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+
+  roles       String[] @default([])
+  permissions String[] @default([])
+
+  /// Sealed with AES-256-GCM under MFA_SECRET_KEY, never stored in the clear.
+  mfaSecret      String?   @map("mfa_secret")
+  mfaEnabledAt   DateTime? @map("mfa_enabled_at")
+  /// Argon2 hashes, removed one by one as they are spent.
+  mfaBackupCodes String[]  @default([]) @map("mfa_backup_codes")
+
+  lastLoginAt DateTime? @map("last_login_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  oauthAccounts OAuthAccount[]
+
+  /// The same address may exist as a customer and as an agent; it is the pair that is unique.
+  @@unique([actorType, email])
+  @@index([actorType, createdAt(sort: Desc), id(sort: Desc)])
+  @@map("actors")
+}
+
+/// Append-only. Never updated, never deleted by the application: a security log that the
+/// application can rewrite is not evidence of anything.
+model AuthAudit {
+  id        String   @id
+  actorId   String?  @map("actor_id")
+  actorType String   @map("actor_type")
+  event     String
+  ip        String?
+  userAgent String?  @map("user_agent")
+  requestId String?  @map("request_id")
+  metadata  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([event, createdAt(sort: Desc)])
+  @@map("auth_audit")
+}
+
+model OAuthAccount {
+  id                String   @id
+  actorId           String   @map("actor_id")
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  actor Actor @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([actorId])
+  @@map("oauth_accounts")
+}
+
+model Notification {
+  id      String @id
+  actorId String @map("actor_id")
+  type    String
+  title   String
+  body    String
+  data    Json   @default("{}")
+
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([actorId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([actorId, readAt])
+  @@map("notifications")
+}
+
+enum MediaStatus {
+  pending
+  ready
+  failed
+}
+
+model Media {
+  id         String      @id
+  ownerType  String      @map("owner_type")
+  ownerId    String      @map("owner_id")
+  filename   String
+  mimeType   String      @map("mime_type")
+  size       Int
+  storageKey String      @map("storage_key")
+  status     MediaStatus @default(pending)
+  variants   Json        @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([ownerType, ownerId, createdAt])
+  @@map("media")
+}
+
+// ---------------------------------------------------------------------------------------
+// Catalog
+// ---------------------------------------------------------------------------------------
+
+model Category {
+  id          String  @id
+  slug        String  @unique
+  name        String
+  description String?
+  /// Self-relation: one level of nesting is enough for a shop, and the column costs nothing
+  /// if the project never uses it.
+  parentId    String? @map("parent_id")
+  position    Int     @default(0)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  parent   Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children Category[] @relation("CategoryTree")
+  products Product[]
+
+  @@index([parentId, position])
+  @@index([deletedAt, position, id])
+  @@map("categories")
+}
+
+enum ProductStatus {
+  draft
+  active
+  archived
+}
+
+model Product {
+  id          String        @id
+  slug        String        @unique
+  name        String
+  description String
+  brand       String?
+  categoryId  String        @map("category_id")
+  status      ProductStatus @default(draft)
+
+  /// What the product costs when a variant does not override it. Minor units.
+  basePriceCents Int    @map("base_price_cents")
+  currency       String @default("XOF")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  category Category         @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  variants ProductVariant[]
+
+  // Keyset pagination reads (createdAt, id) in that order; deletedAt leads so the index
+  // still serves the list queries the soft-delete extension rewrites.
+  @@index([deletedAt, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([categoryId, status])
+  @@index([status])
+  @@map("products")
+}
+
+/// What is actually bought and counted. A product with a single variant is normal: it keeps
+/// the cart, the order line and the stock rules written once instead of twice.
+model ProductVariant {
+  id        String @id
+  productId String @map("product_id")
+  sku       String @unique
+  name      String
+
+  priceCents Int @map("price_cents")
+  /// Never negative. Enforced by a CHECK constraint added in the migration, not only by the
+  /// service: two concurrent checkouts must not be able to talk it below zero.
+  stock      Int @default(0)
+
+  /// Free-form axes such as { "color": "black", "size": "M" }. Kept as JSON because which
+  /// axes exist is a decision of the shop, not of the schema.
+  attributes Json @default("{}")
+
+  weightGrams Int?    @map("weight_grams")
+  isActive    Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  product    Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, name])
+  @@index([productId, isActive])
+  @@map("product_variants")
+}
+
+// ---------------------------------------------------------------------------------------
+// Customer
+// ---------------------------------------------------------------------------------------
+
+model Address {
+  id         String  @id
+  customerId String  @map("customer_id")
+  label      String
+  recipient  String
+  phone      String
+  city       String
+  district   String?
+  line1      String
+  notes      String?
+  isDefault  Boolean @default(false) @map("is_default")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([customerId, deletedAt])
+  @@map("addresses")
+}
+
+// ---------------------------------------------------------------------------------------
+// Cart
+// ---------------------------------------------------------------------------------------
+
+/// One open cart per customer. Checkout empties it rather than closing it, so there is no
+/// second state to reconcile and no way to end up with two carts a customer can add to.
+model Cart {
+  id         String @id
+  customerId String @unique @map("customer_id")
+  currency   String @default("XOF")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items CartItem[]
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String @id
+  cartId    String @map("cart_id")
+  variantId String @map("variant_id")
+  quantity  Int
+
+  /// Snapshot taken when the line was added. The cart shows what the customer was told;
+  /// checkout re-reads the live price and refuses if it moved.
+  unitPriceCents Int @map("unit_price_cents")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  cart    Cart           @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  /// Adding the same variant twice raises the quantity of one line instead of creating a second.
+  @@unique([cartId, variantId])
+  @@index([cartId])
+  @@map("cart_items")
+}
+
+// ---------------------------------------------------------------------------------------
+// Order
+// ---------------------------------------------------------------------------------------
+
+enum OrderStatus {
+  pending_payment
+  paid
+  preparing
+  shipped
+  delivered
+  cancelled
+}
+
+enum OrderEventType {
+  placed
+  status_changed
+  note_added
+}
+
+model Order {
+  id         String      @id
+  reference  String      @unique
+  customerId String      @map("customer_id")
+  status     OrderStatus @default(pending_payment)
+  currency   String      @default("XOF")
+
+  subtotalCents Int @map("subtotal_cents")
+  shippingCents Int @map("shipping_cents")
+  totalCents    Int @map("total_cents")
+
+  /// Copied, not referenced. An address the customer later edits or deletes must not change
+  /// where a past order was sent.
+  shipRecipient String  @map("ship_recipient")
+  shipPhone     String  @map("ship_phone")
+  shipCity      String  @map("ship_city")
+  shipDistrict  String? @map("ship_district")
+  shipLine1     String  @map("ship_line1")
+  shipNotes     String? @map("ship_notes")
+
+  placedAt    DateTime  @default(now()) @map("placed_at")
+  paidAt      DateTime? @map("paid_at")
+  shippedAt   DateTime? @map("shipped_at")
+  deliveredAt DateTime? @map("delivered_at")
+  cancelledAt DateTime? @map("cancelled_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  items  OrderItem[]
+  events OrderEvent[]
+
+  @@index([customerId, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([status, createdAt(sort: Desc), id(sort: Desc)])
+  @@index([createdAt(sort: Desc), id(sort: Desc)])
+  @@map("orders")
+}
+
+/// Denormalised on purpose. A price change or a renamed product must not rewrite history,
+/// so everything the invoice shows is copied at checkout; `variantId` is kept only to let
+/// a cancellation put the stock back.
+model OrderItem {
+  id        String @id
+  orderId   String @map("order_id")
+  variantId String @map("variant_id")
+
+  sku            String
+  productName    String @map("product_name")
+  variantName    String @map("variant_name")
+  unitPriceCents Int    @map("unit_price_cents")
+  quantity       Int
+  lineTotalCents Int    @map("line_total_cents")
+
+  order   Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  variant ProductVariant @relation(fields: [variantId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([variantId])
+  @@map("order_items")
+}
+
+model OrderEvent {
+  id      String         @id
+  orderId String         @map("order_id")
+  type    OrderEventType
+  /// Free-form like `actors.actor_type`: which actor types exist is decided by the project.
+  actorType  String       @map("actor_type")
+  actorId    String?      @map("actor_id")
+  message    String?
+  fromStatus OrderStatus? @map("from_status")
+  toStatus   OrderStatus? @map("to_status")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_events")
+}

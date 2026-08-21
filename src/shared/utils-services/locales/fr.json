@@ -1,0 +1,23 @@
+{
+  "notification.order.placed.title": "Commande enregistrée",
+  "notification.order.placed.body": "Votre commande {reference} d'un montant de {total} a bien été enregistrée. Vous recevrez un message à chaque étape de sa préparation.",
+  "notification.order.status.title": "Votre commande a changé de statut",
+  "notification.order.status.body": "La commande {reference} est passée au statut « {status} ».",
+  "order.status.pending_payment": "En attente de paiement",
+  "order.status.paid": "Payée",
+  "order.status.preparing": "En préparation",
+  "order.status.shipped": "Expédiée",
+  "order.status.delivered": "Livrée",
+  "order.status.cancelled": "Annulée",
+  "auth.verify.subject": "Confirmez votre adresse e-mail",
+  "auth.verify.body": "Votre code de confirmation est {code}. Il expire dans 24 heures.",
+  "auth.reset.subject": "Réinitialisation de votre mot de passe",
+  "auth.reset.body": "Votre code de réinitialisation est {code}. Il expire dans 15 minutes. Si vous n'êtes pas à l'origine de cette demande, ignorez ce message.",
+  "auth.security.passwordChanged.subject": "Votre mot de passe a été modifié",
+  "auth.security.passwordChanged.body": "Le mot de passe de votre compte vient d'être modifié et vos autres sessions ont été fermées. Si vous n'êtes pas à l'origine de ce changement, réinitialisez votre mot de passe immédiatement.",
+  "auth.security.sessionsRevoked.subject": "Vos sessions ont été fermées",
+  "auth.security.sessionsRevoked.body": "Une activité inhabituelle a été détectée sur votre compte et toutes vos sessions ont été fermées par précaution. Reconnectez-vous et changez votre mot de passe.",
+  "email.greeting": "Bonjour",
+  "email.signature": "L'équipe {appName}",
+  "email.footer": "Ce message est automatique, merci de ne pas y répondre."
+}
