@@ -519,3 +519,31 @@ the last unit.
 - **The database is the last line of defence**: `CHECK (stock >= 0)`, `CHECK (quantity > 0)`,
   positive-amount constraints, and a `RESTRICT` on the variant an order line points at.
 - **Request ids** in every log line, every response body and the `x-request-id` header.
+
+---
+
+## The OrangCode TypeScript family
+
+- [orangcode-express-ts](https://github.com/GITHUB_USER/orangcode-express-ts) — the template: Express 5 + strict TypeScript, Postgres (Prisma) or MongoDB (Mongoose)
+- [orangcode-cli](https://github.com/GITHUB_USER/orangcode-cli) — the generator: blueprint → module, byte-identical regeneration
+- [mobile-money-ledger-api](https://github.com/GITHUB_USER/mobile-money-ledger-api) — validation project: wallets, transfers, double-entry ledger (Postgres)
+- [social-feed-api](https://github.com/GITHUB_USER/social-feed-api) — validation project: follow graph and home timeline (MongoDB)
+- **ecommerce-orders-api** (this repository) — validation project: catalogue, cart, orders (Postgres)
+
+## How I built this with Claude Code
+
+This repository is part of the TypeScript redesign of [OrangCode](https://orangcode.com), the
+low-code platform I co-founded. I designed the architecture and directed the work; Claude Code
+(Opus and Fable models) wrote most of the code, step by step, under these rules:
+
+- **Spec first.** Each step started from a written plan with acceptance criteria. I reviewed and
+  approved the plan before any code was written.
+- **Tests first, and seen red.** A new test had to fail before the fix that makes it pass.
+  Important guarantees were also checked by _sabotage_: remove the protection on purpose and
+  confirm that a test fails.
+- **One session log for several models.** A numbered set of design notes and a session log let a
+  new session, or a different model, continue the work without losing context.
+- **Human review of every diff.** I read each change and asked for corrections before it was
+  committed.
+- **Quality gates on every step:** strict TypeScript, type-aware ESLint, Prettier, and the full
+  test suite.
