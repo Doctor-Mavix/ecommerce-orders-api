@@ -524,10 +524,10 @@ the last unit.
 
 ## The OrangCode TypeScript family
 
-- [orangcode-express-ts](https://github.com/GITHUB_USER/orangcode-express-ts) — the template: Express 5 + strict TypeScript, Postgres (Prisma) or MongoDB (Mongoose)
-- [orangcode-cli](https://github.com/GITHUB_USER/orangcode-cli) — the generator: blueprint → module, byte-identical regeneration
-- [mobile-money-ledger-api](https://github.com/GITHUB_USER/mobile-money-ledger-api) — validation project: wallets, transfers, double-entry ledger (Postgres)
-- [social-feed-api](https://github.com/GITHUB_USER/social-feed-api) — validation project: follow graph and home timeline (MongoDB)
+- [orangcode-express-ts](https://github.com/Doctor-Mavix/orangcode-express-ts) — the template: Express 5 + strict TypeScript, Postgres (Prisma) or MongoDB (Mongoose)
+- [orangcode-cli](https://github.com/Doctor-Mavix/orangcode-cli) — the generator: blueprint → module, byte-identical regeneration
+- [mobile-money-ledger-api](https://github.com/Doctor-Mavix/mobile-money-ledger-api) — validation project: wallets, transfers, double-entry ledger (Postgres)
+- [social-feed-api](https://github.com/Doctor-Mavix/social-feed-api) — validation project: follow graph and home timeline (MongoDB)
 - **ecommerce-orders-api** (this repository) — validation project: catalogue, cart, orders (Postgres)
 
 ## How I built this with Claude Code
