@@ -57,10 +57,9 @@ jobs:
     env:
       # Matches docker-compose.yml. tests/setup.ts fills in everything else the application
       # validates at boot, so no secret is needed to run this workflow.
-      DATABASE_URL: postgresql://orangcode:orangcode@127.0.0.1:5432/orangcode
-      TEST_POSTGRES_URL: postgresql://orangcode:orangcode@127.0.0.1:5432/orangcode
-      TEST_MONGODB_URL: mongodb://127.0.0.1:27018/orangcode?replicaSet=rs0
-      REDIS_URL: redis://127.0.0.1:6379
+      DATABASE_URL: postgresql://shop:shop@127.0.0.1:5433/ecommerce
+      TEST_POSTGRES_URL: postgresql://shop:shop@127.0.0.1:5433/ecommerce
+      REDIS_URL: redis://127.0.0.1:6380
 
   # A broken Dockerfile is only discovered at deploy time otherwise. Built, not pushed:
   # publishing belongs to a release workflow, which depends on where the project is deployed.
